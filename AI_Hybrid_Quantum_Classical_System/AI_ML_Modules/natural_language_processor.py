@@ -1,36 +1,41 @@
-
-# /AI_ML_Modules/natural_language_processor.py
-
+import random
 import spacy
-from spacy.tokens import DocBin
 from spacy.training import Example
 from spacy.util import minibatch
 
-def train_spacy_model(training_data, model='en_core_web_sm', iterations=20):
-    nlp = spacy.load(model)  # Load existing Spacy model
-    if 'ner' not in nlp.pipe_names:
-        ner = nlp.create_pipe('ner')
-        nlp.add_pipe(ner, last=True)
-    else:
-        ner = nlp.get_pipe('ner')
+def train_spacy_model(training_data, model='en_core_web_sm', iterations=20, dropout=0.5, batch_size=8):
+    """
+    Train a SpaCy NER model using the provided training data.
 
+    Parameters:
+    - training_data (list): List of tuples containing text and annotations.
+    - model (str): Name of the SpaCy model to use (default='en_core_web_sm').
+    - iterations (int): Number of training iterations (default=20).
+    - dropout (float): Dropout rate for regularization during training (default=0.5).
+    - batch_size (int): Size of minibatches for training (default=8).
+
+    Returns:
+    - spacy.language.Language: Trained SpaCy NER model.
+    """
+    # Load existing SpaCy model or create new
+    nlp = spacy.load(model)
+    ner = nlp.get_pipe('ner') if 'ner' in nlp.pipe_names else nlp.add_pipe('ner')
+
+    # Add entity labels from training data
     for _, annotations in training_data:
         for ent in annotations.get('entities'):
             ner.add_label(ent[2])
 
-    # Disable other pipes during training
-    other_pipes = [pipe for pipe in nlp.pipe_names if pipe != 'ner']
-    with nlp.disable_pipes(*other_pipes):
+    # Disable other pipeline components during training
+    with nlp.disable_pipes(*[pipe for pipe in nlp.pipe_names if pipe != 'ner']):
         optimizer = nlp.begin_training()
         for itn in range(iterations):
             random.shuffle(training_data)
             losses = {}
-            batches = minibatch(training_data, size=8)
-            for batch in batches:
+            for batch in minibatch(training_data, size=batch_size):
                 texts, annotations = zip(*batch)
-                docs = [nlp.make_doc(text) for text in texts]
-                examples = [Example.from_dict(doc, ann) for doc, ann in zip(docs, annotations)]
-                nlp.update(examples, drop=0.5, sgd=optimizer, losses=losses)
+                examples = [Example.from_dict(nlp.make_doc(text), ann) for text, ann in zip(texts, annotations)]
+                nlp.update(examples, drop=dropout, sgd=optimizer, losses=losses)
             print(f"Iteration {itn}, Losses: {losses}")
 
     return nlp
@@ -41,7 +46,7 @@ if __name__ == '__main__':
         ("Who is Shaka Khan?", {"entities": [(7, 16, "PERSON")]}),
         ("I like London and Berlin.", {"entities": [(7, 13, "LOC"), (18, 24, "LOC")]})
     ]
-    nlp_model = train_spacy_model(TRAIN_DATA)
+    nlp_model = train_spacy_model(TRAIN_DATA, iterations=30, dropout=0.6)
     test_text = "Shaka Khan remains influential."
     doc = nlp_model(test_text)
     for ent in doc.ents:
