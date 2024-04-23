@@ -1,6 +1,15 @@
-version: "3"
+# docker-compose.yml
+
+version: '3.8'
+
 services:
-  app:
-    build: .
+  system:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - LOG_FILE=/app/logs/system.log
