@@ -1,2 +1,8 @@
-# Requirements
-# List of necessary Python packages.
+# requirements.txt
+
+# Add your required Python packages here
+psutil
+numpy
+scikit-learn
+qiskit
+tensorflow
