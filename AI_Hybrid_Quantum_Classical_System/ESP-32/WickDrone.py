@@ -1,3 +1,5 @@
+# Adaptable redundacy fucntions for expansion of offenses and defesnses. Need to include a preimptive EMP pulse with targeting 7% titanium doping claymore projectiles for max damage to near by taregts as failsafe  
+
 import itertools
 import socket
 import subprocess
