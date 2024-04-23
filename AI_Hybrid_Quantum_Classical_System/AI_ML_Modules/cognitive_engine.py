@@ -1,13 +1,19 @@
-# /AI_ML_Modules/cognitive_engine.py
-
 import logging
 import argparse
-from typing import Tuple
 import numpy as np
 import scipy.stats as stats
+from typing import Tuple
+import multiprocessing
 
 class CognitiveEngine:
-    def __init__(self, decision_threshold: float = 0.5) -> None:
+    """
+    A class representing a cognitive engine for data analysis and decision making.
+
+    Attributes:
+        decision_threshold (float): The decision threshold for the cognitive engine.
+    """
+
+    def __init__(self, decision_threshold: float = 0.5):
         """
         Initialize the CognitiveEngine object.
 
@@ -71,51 +77,123 @@ def configure_logging(log_file: str = 'cognitive_engine.log') -> None:
         None
     """
     logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def run_cognitive_engine(decision_threshold: float = None) -> None:
+def validate_threshold_input(threshold_input: str) -> float:
     """
-    Run the cognitive engine with the specified decision threshold.
+    Validates the input for the decision threshold.
 
     Args:
-        decision_threshold (float): The decision threshold for the cognitive engine. If not provided, prompt user for input.
+        threshold_input (str): The input string for the decision threshold.
+
+    Returns:
+        float: The validated decision threshold.
+
+    Raises:
+        ValueError: If the input is invalid or out of range.
+    """
+    try:
+        decision_threshold = float(threshold_input)
+        if not 0 <= decision_threshold <= 1:
+            raise ValueError("Threshold must be between 0 and 1.")
+        return decision_threshold
+    except ValueError:
+        raise ValueError("Invalid input. Please enter a valid number.")
+
+def generate_data(mean: float = 0.7, std_deviation: float = 0.1, num_samples: int = 1000) -> np.ndarray:
+    """
+    Generates simulated data based on normal distribution.
+
+    Args:
+        mean (float): The mean of the normal distribution.
+        std_deviation (float): The standard deviation of the normal distribution.
+        num_samples (int): The number of samples to generate.
+
+    Returns:
+        np.ndarray: The generated data samples.
+    """
+    return np.random.normal(mean, std_deviation, num_samples)
+
+def run_analysis(data: np.ndarray, engine: CognitiveEngine) -> Tuple[str, float, float]:
+    """
+    Runs data analysis using the specified engine.
+
+    Args:
+        data (np.ndarray): The data to analyze.
+        engine (CognitiveEngine): The cognitive engine instance to use for analysis.
+
+    Returns:
+        Tuple[str, float, float]: A tuple containing the decision, mean value, and probability above threshold.
+    """
+    analysis_results = engine.analyze_data(data)
+    decision, mean_value = engine.make_decision(analysis_results)
+    probability_above_threshold = engine.calculate_probability(data)
+    return decision, mean_value, probability_above_threshold
+
+def save_results(results: Tuple[str, float, float], output_file: str) -> None:
+    """
+    Saves analysis results to a file.
+
+    Args:
+        results (Tuple[str, float, float]): A tuple containing analysis results.
+        output_file (str): The path to the output file.
 
     Returns:
         None
     """
+    decision, mean_value, probability_above_threshold = results
+    with open(output_file, 'a') as file:
+        file.write(f"Decision: {decision}, Mean Value: {mean_value}, Probability Above Threshold: {probability_above_threshold}\n")
+def run_cognitive_engine(decision_threshold: float = None, num_processes: int = 1, save_output: bool = False, output_file: str = 'analysis_results.txt') -> None:
+    """
+    Runs the cognitive engine with specified configurations.
+
+    Args:
+        decision_threshold (float): The decision threshold for the cognitive engine.
+        num_processes (int): The number of processes for parallel computing.
+        save_output (bool): Whether to save analysis results to a file.
+        output_file (str): The path to the output file.
+
+    Returns:
+        None
+    """
+    configure_logging()
+
     try:
-        configure_logging()
-        
         if decision_threshold is None:
-            # Get decision threshold from user input if not provided
-            decision_threshold = float(input("Enter decision threshold: "))
-        
-        logger.info("Initializing CognitiveEngine with decision threshold %.2f", decision_threshold)
+            while True:
+                threshold_input = input("Enter decision threshold (between 0 and 1): ")
+                try:
+                    decision_threshold = validate_threshold_input(threshold_input)
+                    break
+                except ValueError as ve:
+                    print(ve)
+
         engine = CognitiveEngine(decision_threshold=decision_threshold)
-        
-        logger.info("Generating simulated data points")
-        simulated_data = np.random.normal(0.7, 0.1, 1000)  # Generating simulated data points
-        
-        logger.info("Analyzing data")
-        analysis_results = engine.analyze_data(simulated_data)
-        
-        logger.info("Making decision")
-        decision, mean_value = engine.make_decision(analysis_results)
-        
-        logger.info("Calculating probability")
-        probability_above_threshold = engine.calculate_probability(simulated_data)
-        
-        # Displaying results
-        logger.info("Decision: %s, Mean Value: %.2f, Probability Above Threshold: %.2f", decision, mean_value, probability_above_threshold)
-    
+        simulated_data = generate_data()
+
+        if num_processes > 1:
+            pool = multiprocessing.Pool(processes=num_processes)
+            results = [pool.apply_async(run_analysis, args=(simulated_data, engine)) for _ in range(num_processes)]
+            pool.close()
+            pool.join()
+            analysis_results = [result.get() for result in results]
+        else:
+            analysis_results = [run_analysis(simulated_data, engine)]
+
+        for result in analysis_results:
+            decision, mean_value, probability_above_threshold = result
+            logging.info("Decision: %s, Mean Value: %.2f, Probability Above Threshold: %.2f", decision, mean_value, probability_above_threshold)
+            if save_output:
+                save_results(result, output_file)
+
     except Exception as e:
-        logger.exception("An error occurred: %s", str(e))
+        logging.exception("An error occurred: %s", str(e))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the cognitive engine with a specified decision threshold.")
     parser.add_argument('--threshold', type=float, help="Decision threshold for the cognitive engine")
+    parser.add_argument('--processes', type=int, default=1, help="Number of processes for parallel computing")
+    parser.add_argument('--save', action='store_true', help="Save analysis results to a file")
+    parser.add_argument('--output', type=str, default='analysis_results.txt', help="Output file for saving analysis results")
     args = parser.parse_args()
-    
-    if args.threshold is not None:
-        run_cognitive_engine(decision_threshold=args.threshold)
-    else:
-        run_cognitive_engine()
+
+    run_cognitive_engine(args.threshold, args.processes, args.save, args.output)
